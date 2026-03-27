@@ -81,8 +81,11 @@ if prompt := st.chat_input("請在此輸入您的問題..."):
         try:
             # 設定 Gemini API
             genai.configure(api_key=api_key)
-            # 使用 gemini-1.5-flash 作為預設模型，支援長文本且速度快
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            # 修正 404 錯誤：有時候基礎版找不到，我們改用 -latest 或 gemini-pro
+            try:
+                model = genai.GenerativeModel('gemini-1.5-flash-latest')
+            except:
+                model = genai.GenerativeModel('gemini-pro')
             
             # 建構嚴格的系統提示詞
             system_instruction = f"""
