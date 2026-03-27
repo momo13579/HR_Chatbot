@@ -31,10 +31,19 @@ if os.path.exists(rules_dir):
 with st.sidebar:
     st.header("⚙️ 系統設定")
     
-    # 讓使用者輸入 API Key
-    api_key = st.text_input("輸入您的 Google Gemini API Key", type="password", help="系統不會把您的金鑰存下來，每次重新打開網頁都需要填寫一次。")
-    st.markdown("[👉 點此免費取得 Gemini API Key](https://aistudio.google.com/app/apikey)")
-    st.caption("Google 提供免費額度的 Gemini 1.5 Flash 模型，只需登入 Google 帳號即可免費申請。")
+    # 優先嘗試從 Streamlit Secrets 後台讀取 API Key (這樣就不用一直重輸了)
+    api_key = ""
+    try:
+        if "GEMINI_API_KEY" in st.secrets:
+            api_key = st.secrets["GEMINI_API_KEY"]
+            st.success("✅ 已經成功從系統後台自動讀取 API Key！ (員工不需要自己輸入)")
+    except Exception:
+        pass
+        
+    if not api_key:
+        st.warning("尚未在後台設定 API Key，請在下方手動輸入（或前往後台設定）。")
+        api_key = st.text_input("輸入您的 Google Gemini API Key", type="password", help="這裡輸入的 Key 重新整理後會消失。若要永久保存，請在 Streamlit 後台設定 Secrets。")
+        st.markdown("[👉 點此免費取得 Gemini API Key](https://aistudio.google.com/app/apikey)")
     
     st.markdown("---")
     st.markdown("### 📚 知識庫狀態")
@@ -81,11 +90,22 @@ if prompt := st.chat_input("請在此輸入您的問題..."):
         try:
             # 設定 Gemini API
             genai.configure(api_key=api_key)
-            # 修正 404 錯誤：有時候基礎版找不到，我們改用 -latest 或 gemini-pro
-            try:
-                model = genai.GenerativeModel('gemini-1.5-flash-latest')
-            except:
-                model = genai.GenerativeModel('gemini-pro')
+            
+            # 動態尋找這個 API Key 有權限使用的模型，藉此完美避開 404 錯誤
+            available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+            
+            # 優先順序：1.5 flash -> 1.5 pro -> 傳統 pro
+            target_model = 'gemini-1.5-flash' # 預設值
+            preferred = ['models/gemini-1.5-flash', 'models/gemini-1.5-pro', 'models/gemini-pro']
+            for pm in preferred:
+                if pm in available_models:
+                    target_model = pm
+                    break
+            
+            if target_model not in preferred and available_models:
+                target_model = available_models[0] # 如果預設的都沒有，就隨便抓一個可用的
+                
+            model = genai.GenerativeModel(target_model)
             
             # 建構嚴格的系統提示詞
             system_instruction = f"""
