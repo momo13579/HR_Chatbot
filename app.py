@@ -76,14 +76,12 @@ except Exception:
     pass
 
 # 如果沒有抓到後台設定，讓使用者可以在側邊欄輸入
-with st.sidebar:
-    st.markdown("---")
-    st.markdown("### ⏰ 防休眠機制 (Keep-Alive)")
-    if not app_url:
+if not app_url:
+    with st.sidebar:
+        st.markdown("---")
+        st.markdown("### ⏰ 防休眠機制 (Keep-Alive)")
         st.info("若系統部署於雲端，一段時間無人使用會自動休眠。請輸入網址讓系統定期自我喚醒。")
         app_url = st.text_input("輸入此 App 公開網址", placeholder="例如：https://hr-bot.streamlit.app")
-    else:
-        st.success(f"✅ 防休眠已啟動（喚醒目標：{app_url}）")
 
 # 啟動背景防休眠執行緒
 if app_url and "keep_alive_thread" not in st.session_state:
