@@ -2,6 +2,9 @@ import streamlit as st
 import google.generativeai as genai
 import os
 import glob
+import threading
+import requests
+import time
 
 # 設定網頁標題與圖示
 st.set_page_config(page_title="🤖 HR 規章問答機器人", page_icon="📝", layout="wide")
@@ -53,6 +56,41 @@ if not api_key:
                 st.markdown(f"- `{file_name}`")
         else:
             st.error(f"❌ 找不到任何規章檔案。請將 `.md` 或 `.txt` 檔案放入 `{rules_dir}` 資料夾中。")
+
+# ----------------- 防休眠 (Keep-Alive) 機制 -----------------
+def keep_alive(url):
+    """每 15 分鐘向指定的 URL 發送請求以防休眠"""
+    while True:
+        try:
+            requests.get(url)
+        except Exception:
+            pass
+        time.sleep(15 * 60)
+
+# 從 Secrets 嘗試取得 App 網址
+app_url = ""
+try:
+    if "APP_URL" in st.secrets:
+        app_url = st.secrets["APP_URL"]
+except Exception:
+    pass
+
+# 如果沒有抓到後台設定，讓使用者可以在側邊欄輸入
+with st.sidebar:
+    st.markdown("---")
+    st.markdown("### ⏰ 防休眠機制 (Keep-Alive)")
+    if not app_url:
+        st.info("若系統部署於雲端，一段時間無人使用會自動休眠。請輸入網址讓系統定期自我喚醒。")
+        app_url = st.text_input("輸入此 App 公開網址", placeholder="例如：https://hr-bot.streamlit.app")
+    else:
+        st.success(f"✅ 防休眠已啟動（喚醒目標：{app_url}）")
+
+# 啟動背景防休眠執行緒
+if app_url and "keep_alive_thread" not in st.session_state:
+    t = threading.Thread(target=keep_alive, args=(app_url,), daemon=True)
+    t.start()
+    st.session_state.keep_alive_thread = True
+# --------------------------------------------------------
 
 # 初始化聊天紀錄
 if "messages" not in st.session_state:
